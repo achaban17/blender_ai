@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AR · Лампа Pixar</title>
+<script src="./libs/aframe.min.js"></script>
+<script src="./libs/aframe-extras.min.js"></script>
+<script src="./libs/mindar-image-aframe.prod.js"></script>
+<style>
+  html,body{margin:0; height:100%; color:#f0ebe2; font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;}
+  #intro{position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:24px; text-align:center; background:#15130f;}
+  #intro h1{margin:0; font-size:26px; color:#e08a56;}
+  #intro p{margin:0; max-width:34ch; color:#a39b8c; line-height:1.5; font-size:15px;}
+  #intro img{width:min(78vw,340px); border-radius:10px; border:1px solid #3b352a;}
+  button{background:#e08a56; color:#17120e; border:none; font-weight:800; font-size:17px; padding:14px 28px; border-radius:12px; cursor:pointer;}
+  #hud{position:fixed; left:0; right:0; bottom:18px; z-index:10; text-align:center; pointer-events:none; display:none;}
+  #hud span{display:inline-block; background:rgba(21,19,15,.82); padding:9px 16px; border-radius:20px; font-size:14px;}
+  #err{color:#e2685a; max-width:34ch; font-size:14px; display:none;}
+  a-scene{position:fixed; inset:0;}
+</style>
+</head>
+<body>
+<div id="intro">
+  <h1>Лампа Pixar в AR</h1>
+  <p>Відкрий цей маркер на іншому екрані або роздрукуй, натисни «Запустити» й наведи камеру телефона на фото.</p>
+  <img src="./marker.png" alt="Маркер: напис PIXAR">
+  <button id="start" type="button">Запустити AR</button>
+  <p id="err"></p>
+</div>
+<div id="hud"><span id="hudtxt">Наведи камеру на маркер</span></div>
+
+<a-scene id="scene" mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1; warmupTolerance: 5; missTolerance: 10;"
+         color-space="sRGB" renderer="colorManagement: true; physicallyCorrectLights: true; alpha: true" embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+  <a-assets><a-asset-item id="lamp" src="./lamp.glb"></a-asset-item></a-assets>
+  <a-camera position="0 0 0" look-controls="enabled: false" cursor="rayOrigin: mouse"></a-camera>
+  <a-entity id="target" mindar-image-target="targetIndex: 0">
+    <a-light type="ambient" intensity="2.2"></a-light>
+    <a-light type="directional" position="-0.4 1 1.5" intensity="3"></a-light>
+    <!-- масштаб/зсув підігнані так, щоб 3D-літери збігалися з літерами на фото-маркері -->
+    <a-entity id="lamp-model" gltf-model="#lamp" position="0.0232 -0.0833 0.0536" rotation="0 180 0" scale="0.04876 0.04876 0.04876"
+              animation-mixer="clip: *; loop: repeat; timeScale: 0" hide-plane></a-entity>
+  </a-entity>
+</a-scene>
+
+<script>
+  AFRAME.registerComponent('hide-plane', {
+    init: function () {
+      this.el.addEventListener('model-loaded', () => {
+        this.el.object3D.traverse((o) => { if (o.name === 'Plane') o.visible = false; });
+      });
+    }
+  });
+  var started = false;
+  document.getElementById('start').addEventListener('click', async function () {
+    if (started) return;
+    var err = document.getElementById('err'); err.style.display = 'none';
+    try {
+      var sys = document.getElementById('scene').systems['mindar-image-system'];
+      this.disabled = true; this.textContent = 'Запуск камери…';
+      await sys.start(); started = true;
+      document.getElementById('intro').style.display = 'none';
+      document.getElementById('hud').style.display = 'block';
+    } catch (e) {
+      console.error(e); this.disabled = false; this.textContent = 'Запустити AR';
+      err.textContent = 'Не вдалося увімкнути камеру. Дозволь доступ до камери та відкрий сторінку через https.'; err.style.display = 'block';
+    }
+  });
+  var t = document.getElementById('target'), m = document.getElementById('lamp-model'), hud = document.getElementById('hudtxt');
+  t.addEventListener('targetFound', function () {
+    hud.parentNode.style.display = 'none';
+    var c = m.components['animation-mixer']; if (c && c.mixer) c.mixer.setTime(0);
+    m.setAttribute('animation-mixer', 'timeScale', 1); window.__found = (window.__found || 0) + 1;
+  });
+  t.addEventListener('targetLost', function () {
+    hud.parentNode.style.display = 'block'; m.setAttribute('animation-mixer', 'timeScale', 0);
+  });
+</script>
+</body>
+</html>
